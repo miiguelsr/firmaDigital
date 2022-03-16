@@ -1,0 +1,6 @@
+certifi==2021.10.8
+cffi @ file:///C:/ci_310/cffi_1642682485096/work
+cryptography @ file:///C:/ci/cryptography_1639414720302/work
+pycparser @ file:///tmp/build/80754af9/pycparser_1636541352034/work
+PySimpleGUI==4.57.0
+wincertstore==0.2

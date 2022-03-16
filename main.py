@@ -9,12 +9,32 @@ from cryptography.hazmat.primitives import serialization
 
 
 
-def generate_key():
-    #key generator
-    private_key = ec.generate_private_key(
-        ec.SECP384R1()
-    )
-    return private_key
+def privateKeyLoader(filename) -> ec.EllipticCurvePrivateKey:
+    with open(filename, "rb") as f:
+        pk = f.read()
+    try:
+        key = serialization.load_pem_private_key(data=pk,password=None)
+        print('Clave cargada con exito')
+        if isinstance(key, ec.EllipticCurvePrivateKey):    
+            return key
+    except:
+        print('El archivo proporcionado no es una clave privada')
+
+
+
+def publicKeyLoader(filename) -> ec.EllipticCurvePublicKey:
+    with open(filename, "rb") as f:
+        pk = f.read()
+    try:
+        key = serialization.load_pem_public_key(pk)
+        print('Clave cargada con exito')
+        if isinstance(key, ec.EllipticCurvePublicKey):    
+            return key
+    except:
+        print('El archivo proporcionado no es una clave publica')
+        raise
+
+
 
 
 def read(file):
@@ -23,10 +43,11 @@ def read(file):
     return byte
 
 def write(signature,filename):
-
-    with open(filename+"signature.bin", 'wb') as f:
-        f.write(signature)
-    return 0
+    try:
+        with open(filename+"signature.bin", 'wb') as f:
+            f.write(signature)
+    except:
+        raise
 
 
 def sign(private_key,data):
@@ -37,14 +58,13 @@ def sign(private_key,data):
     return signature 
 
 
-def verify(signature,data,private_key):
-    public_key = private_key.public_key()
+def verify(signature,data,public_key):
     try:
         public_key.verify(signature, data, ec.ECDSA(hashes.SHA256()))
-        print('Firma verificada con exito')
+        sg.popup('Firma verificada con exito')
         return True
     except:
-        print('Firma rechazada')
+        sg.popup('Firma rechazada')
     return False
 
 
@@ -55,68 +75,9 @@ def verify(signature,data,private_key):
 
 
 
-def interfaz_carga():
-
-    file_list_column = [
-        [
-            sg.Text("Image Folder"),
-            sg.In(size=(25, 1), enable_events=True, key="-FOLDER-"),
-            sg.FolderBrowse(),
-        ],
-        [
-            sg.Listbox(
-                values=[], enable_events=True, size=(40, 20), key="-FILE LIST-"
-            )
-        ],
-    ]
-
-    layout = [
-        [
-            sg.Column(file_list_column),
-            sg.VSeperator(),
-        ]
-    ]
-
-    window = sg.Window("Cargador de claves", layout)
-
-    # Run the Event Loop
-    while True:
-        event, values = window.read()
-        if event == "Exit" or event == sg.WIN_CLOSED:
-            break
-        # Folder name was filled in, make a list of files in the folder
-        if event == "-FOLDER-":
-            folder = values["-FOLDER-"]
-            try:
-                # Get list of files in folder
-                file_list = os.listdir(folder)
-            except:
-                file_list = []
-
-            fnames = [
-                f
-                for f in file_list
-                if os.path.isfile(os.path.join(folder, f))
-                and f.lower().endswith((".txt","bin"))
-            ]
-            window["-FILE LIST-"].update(fnames)
-        elif event == "-FILE LIST-":  # A file was chosen from the listbox
-            try:
-                filename = os.path.join(
-                    values["-FOLDER-"], values["-FILE LIST-"][0]
-                )
-                signature=read(filename)
-                sg.popup('Archivo de firma', filename,"cargado")
-                window.close()
-                return signature
-            except:
-                pass
-    window.close()
-
-
 
 def interfaz_firma():
-
+######Se carga la clave privada del firmante
     file_list_column = [
         [
             sg.Text("Image Folder"),
@@ -157,7 +118,7 @@ def interfaz_firma():
                 f
                 for f in file_list
                 if os.path.isfile(os.path.join(folder, f))
-                and f.lower().endswith((".png", ".gif",".pdf"))
+                and f.lower().endswith((".pem"))
             ]
             window["-FILE LIST-"].update(fnames)
         elif event == "-FILE LIST-":  # A file was chosen from the listbox
@@ -165,19 +126,149 @@ def interfaz_firma():
                 filename = os.path.join(
                     values["-FOLDER-"], values["-FILE LIST-"][0]
                 )
-                key=generate_key()
+                try:
+                    key=privateKeyLoader(filename)
+                    window.close()
+                except:
+                    sg.popup('El archivo proporcionado no es un archivo de clave privada')
+                    continue
+            except:
+                pass
+
+
+
+
+    file_list_column = [
+        [
+            sg.Text("Image Folder"),
+            sg.In(size=(25, 1), enable_events=True, key="-FOLDER-"),
+            sg.FolderBrowse(),
+        ],
+        [
+            sg.Listbox(
+                values=[], enable_events=True, size=(40, 20), key="-FILE LIST-"
+            )
+        ],
+    ]
+
+    layout2 = [
+        [
+            sg.Column(file_list_column),
+            sg.VSeperator(),
+        ]
+    ]
+
+    window = sg.Window("Firma de archivo", layout2)
+
+    # Run the Event Loop
+    while True:
+        event, values = window.read()
+        if event == "Exit" or event == sg.WIN_CLOSED:
+            break
+        # Folder name was filled in, make a list of files in the folder
+        if event == "-FOLDER-":
+            folder = values["-FOLDER-"]
+            try:
+                # Get list of files in folder
+                file_list = os.listdir(folder)
+            except:
+                file_list = []
+
+            fnames = [
+                f
+                for f in file_list
+                if os.path.isfile(os.path.join(folder, f))
+                and f.lower().endswith((".pdf"))
+            ]
+            window["-FILE LIST-"].update(fnames)
+        elif event == "-FILE LIST-":  # A file was chosen from the listbox
+            try:
+                filename = os.path.join(
+                    values["-FOLDER-"], values["-FILE LIST-"][0]
+                )
                 data=read(filename)
                 signature=sign(key,data)
                 #escribe firma a archivo 
-                write(signature,filename)
-                sg.popup('Archivo de firma creado con nombre', filename+"signature.txt")
-                window.close()
+                try:
+                    write(signature,filename)
+                    sg.popup('Archivo de firma creado con nombre', filename+"signature.bin")
+                    window.close()
+                except:
+                    continue
             except:
                 pass
-    return key
-    
 
-def interfaz_verificacion(master):
+
+
+
+
+
+
+
+
+
+
+def interfaz_verificacion():
+    file_list_column = [
+        [
+            sg.Text("Image Folder"),
+            sg.In(size=(25, 1), enable_events=True, key="-FOLDER-"),
+            sg.FolderBrowse(),
+        ],
+        [
+            sg.Listbox(
+                values=[], enable_events=True, size=(40, 20), key="-FILE LIST-"
+            )
+        ],
+    ]
+
+    publicKeyLoaderLayout = [
+        [
+            sg.Column(file_list_column),
+            sg.VSeperator(),
+        ]
+    ]
+
+    window = sg.Window("Carga de clave publica", publicKeyLoaderLayout)
+
+    # Run the Event Loop
+    while True:
+        event, values = window.read()
+        if event == "Salir" or event == sg.WIN_CLOSED:
+            break
+        # Folder name was filled in, make a list of files in the folder
+        if event == "-FOLDER-":
+            folder = values["-FOLDER-"]
+            try:
+                # Get list of files in folder
+                file_list = os.listdir(folder)
+            except:
+                file_list = []
+
+            fnames = [
+                f
+                for f in file_list
+                if os.path.isfile(os.path.join(folder, f))
+                and f.lower().endswith((".pem"))
+            ]
+            window["-FILE LIST-"].update(fnames)
+        elif event == "-FILE LIST-":  # A file was chosen from the listbox
+            try:
+                filename = os.path.join(
+                    values["-FOLDER-"], values["-FILE LIST-"][0]
+                )
+                try: 
+                    loaded_public_key= publicKeyLoader(filename)
+                except:
+                    sg.popup('El archivo cargado no es una clave publica')
+                    continue
+            except:
+                pass
+            window.close()
+
+
+
+
     file_list_column = [
         [
             sg.Text("Image Folder"),
@@ -198,7 +289,7 @@ def interfaz_verificacion(master):
         ]
     ]
 
-    window = sg.Window("Verificador de firma", layout)
+    window = sg.Window("Carga de archivo de firma", layout)
 
     # Run the Event Loop
     while True:
@@ -218,7 +309,7 @@ def interfaz_verificacion(master):
                 f
                 for f in file_list
                 if os.path.isfile(os.path.join(folder, f))
-                and f.lower().endswith((".txt",".bin"))
+                and f.lower().endswith((".bin"))
             ]
             window["-FILE LIST-"].update(fnames)
         elif event == "-FILE LIST-":  # A file was chosen from the listbox
@@ -252,7 +343,7 @@ def interfaz_verificacion(master):
         ]
     ]
 
-    window = sg.Window("Verificador de firma 1", layout2)
+    window = sg.Window("Carga de documento firmado", layout2)
 
     # Run the Event Loop
     while True:
@@ -280,7 +371,7 @@ def interfaz_verificacion(master):
                 filename = os.path.join(
                     values["-FOLDER-"], values["-FILE LIST-"][0]
                 )
-                verify(loaded_sig,read(filename),master)
+                verify(loaded_sig,read(filename),loaded_public_key)
                 window.close()
             except:
                 pass
@@ -290,8 +381,7 @@ def interfaz_verificacion(master):
 
 def menu():
     layout = [[sg.Text('Menu')],         
-                    [sg.Button('Generar Clave'),sg.Button('Cargar Clave'), sg.Button('Firmar Documento'),\
-                        sg.Button('Verificar Firma')]]      
+                    [sg.Button('Firmar Documento'),sg.Button('Verificar Firma')]]      
 
     window = sg.Window('Window Title', layout)    
     while 1:
@@ -299,13 +389,10 @@ def menu():
         if event == "Exit" or event == sg.WIN_CLOSED:
             break
         if event=="Firmar Documento":
-            used_k=interfaz_firma()
+            interfaz_firma()
         if event=="Verificar Firma":
-            interfaz_verificacion(used_k)
-#        if event=="Generar Clave":
-#            key=generate_key()
-        if event=="Cargar Clave":
-            firma=interfaz_carga()
+            interfaz_verificacion()
+
 menu()
         
 
